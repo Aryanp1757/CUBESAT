@@ -1,0 +1,544 @@
+#include<Servo.h>
+#include <ESP8266WiFi.h>
+#include <WiFiClient.h>
+#include <ESP8266WebServer.h>
+#include <ESP8266mDNS.h>
+#include <Wire.h>
+#include <SFE_BMP180.h>
+
+Servo myservo;
+#define Servo_pin 12 // GPIO pin
+int pos = 90; // direction
+
+#define ldr_1_pin 0 // GPIO pin
+#define ldr_2_pin 2 // GPIO pin
+#ifndef STASSID
+#define STASSID "Vatsal"
+#define STAPSK  "123456789"
+#endif
+const char *ssid = STASSID;
+const char *password = STAPSK;
+
+
+int val;
+int ldr_1_val;
+int ldr_2_val;
+int ldr_diff;
+int tolerance = 96; // change by taking readings from ldr with light and without light
+
+SFE_BMP180 bmp180;
+float Po =   1011.46;
+ double T, P, alt;
+ESP8266WebServer server(80);
+const char MAIN_page[] PROGMEM = R"=====(
+<!doctype html>
+<html>
+<head>
+  <title>Data Logger</title>
+  <h1 style="text-align:center; color:red;">VARTIX AEROSPACE</h1>
+  <h3 style="text-align:center;">Data Logger</h3>
+  <style>
+  canvas{
+    -moz-user-select: none;
+    -webkit-user-select: none;
+    -ms-user-select: none;
+  }
+  /* Data Table Styling*/ 
+  #dataTable {
+    font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+    border-collapse: collapse;
+    width: 100%;
+    text-align: center;
+  }
+  #dataTable td, #dataTable th {
+    border: 1px solid #ddd;
+    padding: 8px;
+  }
+  #dataTable tr:nth-child(even){background-color: #f2f2f2;}
+  #dataTable tr:hover {background-color: #ddd;}
+  #dataTable th {
+    padding-top: 12px;
+    padding-bottom: 12px;
+    text-align: center;
+    background-color: #050505;
+    color: white;
+  }
+
+   #splash {
+            position:absolute;
+            top: 0;
+            left: 0;
+            background: white !important;
+            height: 100vh;
+            width: 100%;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            opacity: 1;
+
+
+
+            
+            transition: opacity 1s;
+        }
+        
+        .logo img{
+            
+            height: 300px;
+    width: 300px;
+    border-radius: 50%;
+    position: absolute;
+    margin: auto;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    overflow: hidden;
+    width: 300px;
+    
+        }
+        
+        #splash img {
+            width: 300px;
+            border-radius: 900px;
+            animation: animName 2s linear infinite;
+  width:50px;
+  height:50px;
+  background:#0091EA;
+  margin:20px;
+  
+        }
+        
+        #splash.fade {
+            opacity: 0;
+        }
+
+        body{
+    background-color: white;
+    padding: 0;
+    margin: 0;
+}
+
+.container{
+    height: 370px;
+    width: 370px;
+    position: absolute;
+    margin: auto;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+}
+
+.moon{
+    background-color: #39beff;
+    height: 170px;
+    width: 170px;
+    border-radius: 50%;
+    position: absolute;
+    margin: auto;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    overflow: hidden;
+}
+
+.crater{
+    background-color: #31b4ff;
+    height: 30px;
+    width: 30px;
+    border-radius: 50%;
+    position: relative;
+}
+
+.crater:before{
+    content: "";
+    position: absolute;
+    height: 25px;
+    width: 25px;
+    border-radius: 50%;
+    box-shadow: -5px 0 0 2px #1ca4f9;
+    top: 2px;
+    left: 7px;
+}
+
+.crater-1{
+    top: 27px;
+    left: 90px;
+    transform: scale(0.9);
+}
+
+.crater-2{
+    bottom: 15px;
+    left: 61px;
+    transform: scale(0.6);
+}
+
+.crater-3{
+    left: 15px;
+    transform: scale(0.75);
+}
+
+.crater-4{
+    left: 107px;
+    top: 32px;
+    transform: scale(1.18);
+}
+
+.crater-5{
+    left: 33px;
+    bottom: 4px;
+    transform: scale(0.65);
+}
+
+.shadow{
+    height: 190px;
+    width: 190px;
+    box-shadow: 21px 0 0 5px rgba(0,0,0,0.15);
+    border-radius: 50%;
+    position: relative;
+    bottom: 157.5px;
+    right: 46px;
+}
+
+.eye{
+    height: 12px;
+    width: 12px;
+    background-color: #161616;
+    position: relative;
+    border-radius: 50%;
+}
+
+.eye-l{
+    bottom: 255px;
+    left: 59px;
+}
+
+.eye-r{
+    bottom: 267px;
+    left: 101px;
+}
+
+.mouth{
+    height: 5px;
+    width: 10px;
+    border: 3px solid #161616;
+    position: relative;
+    bottom: 262px;
+    left: 79px;
+    border-top: none;
+    border-radius: 0 0 10px 10px;
+}
+
+.blush{
+    height: 7.5px;
+    width: 7.5px;
+    background-color: #1ca4f9;
+    position: relative;
+    border-radius: 50%;
+}
+
+.blush-1{
+    bottom: 273px;
+    left: 50px;
+}
+#splash img {
+    height: 170px;
+    width: 170px;
+    border-radius: 50%;
+    position: absolute;
+    margin: auto;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    overflow: hidden;
+	
+}
+
+
+.blush-2{
+    bottom: 281px;
+    left: 115px;
+}
+
+.orbit{
+    height: 280px;
+    width: 280px;
+    border-radius: 50%;
+    position: absolute;
+    margin: auto;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    animation: spin 5s infinite linear;
+}
+
+@keyframes spin{
+    100%{
+        transform: rotate(360deg);
+    }
+}
+
+.rocket{
+    background-color: black;
+    height: 50px;
+    width: 25px;
+    border-radius: 50% 50% 0 0;
+    position: relative;
+    left: -11px;
+    top: 115px;
+}
+
+.rocket:before{
+    position: absolute;
+    content: "";
+    background-color: #39beff;
+    height: 20px;
+    width: 55px;
+    z-index: -1;
+    border-radius: 50% 50% 0 0;
+    right: -15px;
+    bottom: 0;
+}
+
+.rocket:after{
+    position: absolute;
+    content: "";
+    background-color: #39beff;
+    height: 4px;
+    width: 15px;
+    border-radius: 0 0 2px 2px;
+    bottom: -4px;
+    left: 4.3px;
+}
+
+.window{
+    height: 10px;
+    width: 10px;
+    background-color: #151845;
+    border: 2px solid #b8d2ec;
+    border-radius: 50%;
+    position: relative;
+    top: 17px;
+    left: 5px;
+}
+
+
+
+  </style>
+</head>
+<body>
+ <div id='splash'>
+     <div class="container">
+        <div class="moon">
+            <img alt='' class='logo' src= 'https://media.licdn.com/dms/image/C4D0BAQEYWxY98_1Jow/company-logo_200_200/0/1653885582356?e=1687392000&v=beta&t=twvhHNJ9HT2JNBnCAzaBgwOPXu4Oaa1etMrv2Lxm9OE'/>
+        </div>
+        <div class="orbit">
+            <div class="rocket">
+                <div class="window"></div>
+            </div>
+        </div>
+        
+    </div>
+    
+  
+   
+       
+       </div>
+
+       <div>
+        <table id="dataTable">
+          <tr><th>Time</th><th>Altitude (m)</th><th>Pressure (pa)</th><th>Temperature (degree celsius)</th></tr>
+        </table>
+      </div>
+<br>
+<br>  
+<script>
+
+ 
+        setTimeout(() => {
+        document.getElementById('splash').classList.toggle('fade'); }, 2000);
+        //]]>
+        
+var Tvalues = [];
+var Hvalues = [];
+var Cvalues = [];
+var timeStamp = [];
+setInterval(function() {
+  // Call a function repetatively with 5 Second interval
+  getData();
+}, 1000); //5000mSeconds update rate
+ function getData() {
+  var xhttp = new XMLHttpRequest();
+  xhttp.onreadystatechange = function() {
+    if (this.readyState == 4 && this.status == 200) {
+     //Push the data in array
+  var time = new Date().toLocaleTimeString();
+  var txt = this.responseText;
+  var obj = JSON.parse(txt); 
+      Tvalues.push(obj.Altitude);
+      Hvalues.push(obj.Pressure);
+      Cvalues.push(obj.Temperature);
+      timeStamp.push(time);
+  //Update Data Table
+    var table = document.getElementById("dataTable");
+    var row = table.insertRow(1); //Add after headings
+    var cell1 = row.insertCell(0);
+    var cell2 = row.insertCell(1);
+    var cell3 = row.insertCell(2);
+    var cell4 = row.insertCell(3);
+    cell1.innerHTML = time;
+    cell2.innerHTML = obj.Altitude;
+    cell3.innerHTML = obj.Pressure;
+    cell4.innerHTML = obj.Temperature;
+    }
+  };
+  xhttp.open("GET", "readData", true); //Handle readData server on ESP8266
+  xhttp.send();
+}
+</script>
+</body>
+</html>
+)=====";
+void handleRoot()
+{
+ String s = MAIN_page; //Read HTML contents
+ server.send(200, "text/html", s); //Send web page
+}
+void readData()
+{
+String data = "{\"Altitude\":\""+ String(alt) +"\", \"Pressure\":\""+ String(P) +"\" ,\"Temperature\":\""+String(T)+"\"}";
+
+server.send(200, "text/plane", data); 
+
+
+}
+
+void setup()
+{
+  Serial.begin(115200);
+ bool success = bmp180.begin();
+
+  if (success) {
+    Serial.println("BMP180 init success");
+  }
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  Serial.println("");
+
+  // Wait for connection
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println("");
+  Serial.print("Connected to ");
+  Serial.println(ssid);
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  if (MDNS.begin("esp8266")) {
+    Serial.println("MDNS responder started");
+  }
+
+  server.on("/", handleRoot);     
+server.on("/readData", readData); 
+  server.begin();
+  Serial.println("HTTP server started");
+  myservo.attach(Servo_pin);
+  pinMode(ldr_1_pin,OUTPUT);
+  pinMode(ldr_2_pin,OUTPUT);
+}
+void loop()
+{
+  val = analogRead(A0);
+  digitalWrite(ldr_1_pin,LOW);
+  digitalWrite(ldr_2_pin,LOW);
+  myservo.write(pos);
+ server.handleClient();
+  MDNS.update();
+  char status;
+  bool success = false;
+
+  status = bmp180.startTemperature();
+
+ if (status != 0) {
+    delay(100);
+    status = bmp180.getTemperature(T);
+
+    if (status != 0) {
+      status = bmp180.startPressure(3);
+
+      if (status != 0) {
+        delay(status);
+        status = bmp180.getPressure(P, T);
+
+        if (status != 0) {
+          alt = bmp180.altitude(P, Po);
+          Serial.print("Altitude: ");
+          Serial.print(alt);
+          Serial.println(" Meters");
+          Serial.print("Pressure = ");
+          Serial.print(P);
+          Serial.println(" Pa");
+        }
+      }
+    }
+  }
+  
+//  Serial.print("ldr_1_value  ");
+ // Serial.print(ldr_1_pin);
+//Serial.println("ldr_2_value  ");
+ // Serial.print(ldr_2_pin);
+  //delay(1000); // remove these delay afterwards
+  
+  digitalWrite(ldr_1_pin,HIGH);
+  ldr_1_val = analogRead(A0); 
+  Serial.println(ldr_1_val);
+  delay(100);
+  digitalWrite(ldr_1_pin,LOW);
+  delay(100);
+
+  digitalWrite(ldr_2_pin,HIGH);
+  ldr_2_val = analogRead(A0); 
+  Serial.println(ldr_2_val);
+  delay(100);
+  digitalWrite(ldr_2_pin,LOW);
+  delay(100);
+
+  //ldr_diff = ldr_1_val - ldr_2_val;
+//  Serial.println("Difference between two ldr rading is : ");
+ // Serial.print(ldr_diff);
+  
+  if(((abs(ldr_1_val - ldr_2_val)) <= tolerance ) || (abs(ldr_2_val - ldr_1_val) <= tolerance))
+  {
+    
+      
+  }
+  else{
+    if(ldr_1_val > ldr_2_val)
+    {
+      pos = pos+5;
+    }
+    if(ldr_1_val < ldr_2_val)
+    {
+      pos = pos-5;
+    }
+  }
+  if(pos > 180)
+  {
+    pos = 180;
+  }
+  if (pos < 0)
+  {
+    pos = 0;
+  }
+  myservo.write(pos);
+  delay(50);
+}
